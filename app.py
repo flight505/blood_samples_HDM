@@ -7,9 +7,6 @@ import streamlit as st
 from auth import check_password, initialize_session_state
 from chart_utils import create_component_plot, create_radar_chart
 
-# Initialize session state at the very beginning
-initialize_session_state()
-
 # Move the set_page_config call here, ensuring it's the first Streamlit command
 if "page_config_set" not in st.session_state:
     st.set_page_config(
@@ -19,6 +16,9 @@ if "page_config_set" not in st.session_state:
         initial_sidebar_state="expanded",
     )
     st.session_state["page_config_set"] = True
+
+# Initialize session state at the very beginning
+initialize_session_state()
 
 # Check if the user is authenticated
 if not check_password():
