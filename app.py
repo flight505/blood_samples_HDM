@@ -1,7 +1,9 @@
 import os
 
 import pandas as pd
+import snowflake.connector
 import streamlit as st
+from snowflake.connector.pandas_tools import pd_writer
 
 # Check if the user is authenticated
 from auth import check_password, initialize_session_state
@@ -25,52 +27,85 @@ if not check_password():
     st.stop()
 
 
-@st.cache_data
-def load_csv_data(file_path):
-    if os.path.exists(file_path):
-        data = pd.read_csv(file_path)
+@st.cache_resource
+def load_data_from_snowflake():
+    # Set up connection parameters using secrets.toml
+    conn = snowflake.connector.connect(
+        account=st.secrets["snowflake"]["account"],
+        user=st.secrets["snowflake"]["user"],
+        password=st.secrets["snowflake"]["password"],
+        warehouse=st.secrets["snowflake"]["warehouse"],
+        database=st.secrets["snowflake"]["database"],
+        schema=st.secrets["snowflake"]["schema"],
+        role=st.secrets["snowflake"]["role"],
+    )
 
-        if "nohpo_nr" in data.columns:
-            data["nohpo_nr"] = data["nohpo_nr"].astype(int)
+    # Queries for each table with date format casting
+    queries = {
+        "df_all": """
+            SELECT 
+                TO_CHAR(diagdate, 'YYYY-MM-DD') AS diagdate,
+                NOPHO_NR,
+            FROM DF_ALL_FILTERED
+        """,
+        "df_mtx": """
+            SELECT 
+                TO_CHAR(mtx_inf_datetime, 'YYYY-MM-DD HH24:MI:SS') AS mtx_inf_datetime,
+                NOPHO_NR,
+                INFNO,
+            FROM DF_MTX_FILTERED
+        """,
+        "df_blood": """
+            SELECT 
+                TO_CHAR(diagdate, 'YYYY-MM-DD') AS diagdate,
+                TO_CHAR(sample_time, 'YYYY-MM-DD HH24:MI:SS') AS sample_time,
+                NOPHO_NR,
+                COMPONENT,
+                CAST(REPLY_NUM AS FLOAT) AS reply_num,
+                INFNO,
+                REPLY_UNIT,
+            FROM DF_BLOOD_FILTERED
+        """,
+    }
 
-        date_columns = ["diagdate", "sample_time", "birthdate", "mtx_inf_datetime"]
-        for col in date_columns:
-            if col in data.columns:
-                if col == "birthdate":
-                    data[col] = pd.to_datetime(data[col], format="%d-%m-%Y")
-                elif col == "sample_time":
-                    data[col] = pd.to_datetime(data[col], format="%Y-%m-%d %H:%M:%S")
-                elif col == "diagdate":
-                    try:
-                        data[col] = pd.to_datetime(data[col], format="%Y-%m-%d")
-                    except ValueError:
-                        data[col] = pd.to_datetime(
-                            data[col], format="%Y-%m-%d %H:%M:%S"
-                        )
-                else:
-                    data[col] = pd.to_datetime(data[col])
+    # Initialize an empty dictionary to store DataFrames
+    dfs = {}
 
-        return data
-    else:
-        print("The file does not exist")
+    # Execute each query and store the result in the dictionary
+    for key, query in queries.items():
+        cur = conn.cursor()
+        cur.execute(query)
+        df = cur.fetch_pandas_all()
+        df.columns = [
+            col.lower() for col in df.columns
+        ]  # Convert column names to lowercase
+        dfs[key] = df
+        cur.close()
+
+    return dfs["df_all"], dfs["df_mtx"], dfs["df_blood"]
 
 
 def main():
 
-    df_all = load_csv_data("data/df_all_filtered.csv")
-    df_mtx = load_csv_data("data/df_mtx_filtered.csv")
-    df_blood = load_csv_data("data/df_blood_filtered.csv")
+    df_all, df_mtx, df_blood = load_data_from_snowflake()
 
-    # def display_dataframe(df_dict):
-    #     selected_df_name = st.selectbox("Select a DataFrame", list(df_dict.keys()))
-    #     st.dataframe(df_dict[selected_df_name].head(2000), height=200)
+    # Ensure datetime format for relevant columns
+    df_all["diagdate"] = pd.to_datetime(df_all["diagdate"])
+    df_mtx["mtx_inf_datetime"] = pd.to_datetime(df_mtx["mtx_inf_datetime"])
+    df_blood["diagdate"] = pd.to_datetime(df_blood["diagdate"])
+    df_blood["sample_time"] = pd.to_datetime(df_blood["sample_time"])
+
+    def display_dataframe(df_dict):
+        selected_df_name = st.selectbox("Select a DataFrame", list(df_dict.keys()))
+        st.dataframe(df_dict[selected_df_name].head(2000), height=200)
 
     df_dict = {"df_all": df_all, "df_mtx": df_mtx, "df_blood": df_blood}
-    # with st.expander("Display DataFrames"):
-    #     display_dataframe(df_dict)
+    with st.expander("Display DataFrames"):
+        display_dataframe(df_dict)
 
     def interpolate_crossing_time(ts1, val1, ts2, val2, threshold):
         """Interpolates the exact timestamp when the value crosses the threshold."""
+
         if val1 == val2:
             return ts1 if val1 <= threshold else ts2
 
