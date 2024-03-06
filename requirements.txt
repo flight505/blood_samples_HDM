@@ -1,10 +1,6 @@
-# for maintaining requirements.txt; `pipreqs --encoding=utf8 --print`
-pipreqs==0.4.13
-
+numpy==1.26.4
+pandas==2.2.1
+plotly==5.18.0
+python-dotenv==1.0.1
+snowflake_connector_python==3.7.1
 streamlit==1.31.0
-python-dotenv==1.0.0
-
-pandas==2.2.0 # used for Streamlit tables
-plotly==5.18.0  # used for Streamlit plots
-numpy==1.26.3  # used for chart_utils
-snowflake-connector-python==2.7.4
