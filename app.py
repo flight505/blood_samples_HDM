@@ -57,7 +57,7 @@ def load_csv_data(file_path):
 
 def main():
 
-    # df_all = load_csv_data("data/df_all_filtered.csv")
+    df_all = load_csv_data("data/df_all_filtered.csv")
     df_mtx = load_csv_data("data/df_mtx_filtered.csv")
     df_blood = load_csv_data("data/df_blood_filtered.csv")
 
@@ -65,7 +65,7 @@ def main():
     #     selected_df_name = st.selectbox("Select a DataFrame", list(df_dict.keys()))
     #     st.dataframe(df_dict[selected_df_name].head(2000), height=200)
 
-    # df_dict = {"df_all": df_all, "df_mtx": df_mtx, "df_blood": df_blood}
+    df_dict = {"df_all": df_all, "df_mtx": df_mtx, "df_blood": df_blood}
     # with st.expander("Display DataFrames"):
     #     display_dataframe(df_dict)
 
